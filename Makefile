@@ -21,6 +21,14 @@ fmt-check:
 clippy:
 	cargo clippy --all-targets -- -D warnings
 
+.PHONY: check
+check:
+	cargo check --all-targets
+
+# Run formatting, lint, and test checks the way CI would.
+.PHONY: lint
+lint: fmt-check clippy test
+
 .PHONY: optimize
 optimize: build
 	stellar contract optimize --wasm $(WASM)
