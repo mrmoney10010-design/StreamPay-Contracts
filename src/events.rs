@@ -17,3 +17,9 @@ pub fn stream_created(
     env.events()
         .publish(topics, (sender.clone(), recipient.clone(), total));
 }
+
+/// Publishes a `withdrawn` event when a recipient pulls vested funds.
+pub fn stream_withdrawn(env: &Env, id: u64, recipient: &Address, amount: i128) {
+    let topics = (symbol_short!("withdrawn"), id);
+    env.events().publish(topics, (recipient.clone(), amount));
+}
