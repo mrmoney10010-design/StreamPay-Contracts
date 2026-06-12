@@ -123,4 +123,44 @@ impl StreamPayContract {
         let now = env.ledger().timestamp();
         vesting::vested(&stream, now)
     }
+
+    /// Withdraws the vested-but-unwithdrawn balance of stream `id` to its
+    /// `recipient`.
+    ///
+    /// The `recipient` must authorize the call. Returns the amount transferred.
+    /// Errors with [`Error::NothingToWithdraw`] when no funds are available.
+    pub fn withdraw(env: Env, id: u64, recipient: Address) -> Result<i128, Error> {
+        recipient.require_auth();
+
+        let mut stream = storage::read_stream(&env, id).ok_or(Error::StreamNotFound)?;
+        if stream.recipient != recipient {
+            return Err(Error::Unauthorized);
+        }
+        if stream.status == Status::Cancelled {
+            return Err(Error::AlreadyCancelled);
+        }
+
+        let now = env.ledger().timestamp();
+        let vested = vesting::vested(&stream, now)?;
+        let available = vested.checked_sub(stream.withdrawn).ok_or(Error::Overflow)?;
+        if available <= 0 {
+            return Err(Error::NothingToWithdraw);
+        }
+
+        stream.withdrawn = stream
+            .withdrawn
+            .checked_add(available)
+            .ok_or(Error::Overflow)?;
+        if stream.withdrawn >= stream.total {
+            stream.status = Status::Completed;
+        }
+        storage::write_stream(&env, id, &stream);
+
+        let token = storage::read_token(&env);
+        let client = token::Client::new(&env, &token);
+        client.transfer(&env.current_contract_address(), &recipient, &available);
+
+        events::stream_withdrawn(&env, id, &recipient, available);
+        Ok(available)
+    }
 }
