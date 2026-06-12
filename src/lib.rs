@@ -146,6 +146,16 @@ impl StreamPayContract {
         Ok(stream.end - stream.start)
     }
 
+    /// Returns how many seconds of stream `id`'s window have elapsed at the
+    /// current ledger timestamp.
+    ///
+    /// The value is clamped to `[0, duration(id)]`.
+    pub fn elapsed(env: Env, id: u64) -> Result<u64, Error> {
+        let stream = storage::read_stream(&env, id).ok_or(Error::StreamNotFound)?;
+        let now = env.ledger().timestamp();
+        Ok(vesting::elapsed(&stream, now))
+    }
+
     /// Returns the amount vested so far for stream `id` based on the current
     /// ledger timestamp.
     ///

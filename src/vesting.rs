@@ -38,6 +38,18 @@ pub fn unvested(stream: &Stream, now: u64) -> Result<i128, Error> {
     stream.total.checked_sub(vested).ok_or(Error::Overflow)
 }
 
+/// Returns how many seconds of the stream's window have elapsed at `now`.
+///
+/// The result is clamped to `[0, end - start]`: `0` before `start` and the
+/// full window length at or after `end`.
+pub fn elapsed(stream: &Stream, now: u64) -> u64 {
+    if now <= stream.start {
+        return 0;
+    }
+    let end = if now >= stream.end { stream.end } else { now };
+    end - stream.start
+}
+
 /// Returns how far the stream's time window has progressed, in basis points.
 ///
 /// The result is `0` before `start`, `10_000` (100%) at or after `end`, and a
