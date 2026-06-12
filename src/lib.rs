@@ -12,8 +12,8 @@ mod types;
 mod vesting;
 
 use crate::error::Error;
-use crate::types::Stream;
-use soroban_sdk::{contract, contractimpl, Address, Env};
+use crate::types::{Status, Stream};
+use soroban_sdk::{contract, contractimpl, token, Address, Env};
 
 /// The StreamPay contract type.
 #[contract]
@@ -60,5 +60,56 @@ impl StreamPayContract {
     /// Returns the stream with the given `id`, or [`Error::StreamNotFound`].
     pub fn get_stream(env: Env, id: u64) -> Result<Stream, Error> {
         storage::read_stream(&env, id).ok_or(Error::StreamNotFound)
+    }
+
+    /// Creates a new linear payment stream and escrows `total_amount`.
+    ///
+    /// The `sender` must authorize the call. `total_amount` is transferred from
+    /// the sender into the contract immediately. Vesting runs linearly from
+    /// `start_time` to `end_time`. Returns the new stream's id.
+    pub fn create_stream(
+        env: Env,
+        sender: Address,
+        recipient: Address,
+        total_amount: i128,
+        start_time: u64,
+        end_time: u64,
+    ) -> Result<u64, Error> {
+        if !storage::has_admin(&env) {
+            return Err(Error::NotInitialized);
+        }
+        sender.require_auth();
+
+        if total_amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+        if end_time <= start_time {
+            return Err(Error::InvalidTimeRange);
+        }
+
+        // Pull the escrowed funds from the sender into the contract.
+        let token = storage::read_token(&env);
+        let client = token::Client::new(&env, &token);
+        client.transfer(&sender, &env.current_contract_address(), &total_amount);
+
+        let id = storage::read_counter(&env);
+        let next = id.checked_add(1).ok_or(Error::Overflow)?;
+
+        let stream = Stream {
+            sender: sender.clone(),
+            recipient: recipient.clone(),
+            total: total_amount,
+            withdrawn: 0,
+            start: start_time,
+            end: end_time,
+            status: Status::Active,
+        };
+
+        storage::write_stream(&env, id, &stream);
+        storage::write_counter(&env, next);
+        storage::extend_instance(&env);
+
+        events::stream_created(&env, id, &sender, &recipient, total_amount);
+        Ok(id)
     }
 }
