@@ -41,3 +41,13 @@ pub fn read_admin(env: &Env) -> Address {
 pub fn write_admin(env: &Env, admin: &Address) {
     env.storage().instance().set(&DataKey::Admin, admin);
 }
+
+/// Reads the streamed token address from instance storage.
+pub fn read_token(env: &Env) -> Address {
+    env.storage().instance().get(&DataKey::Token).unwrap()
+}
+
+/// Writes the streamed token address into instance storage.
+pub fn write_token(env: &Env, token: &Address) {
+    env.storage().instance().set(&DataKey::Token, token);
+}
