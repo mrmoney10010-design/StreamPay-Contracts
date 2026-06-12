@@ -8,3 +8,15 @@ build:
 .PHONY: test
 test:
 	cargo test
+
+.PHONY: fmt
+fmt:
+	cargo fmt --all
+
+.PHONY: fmt-check
+fmt-check:
+	cargo fmt --all -- --check
+
+.PHONY: clippy
+clippy:
+	cargo clippy --all-targets -- -D warnings
