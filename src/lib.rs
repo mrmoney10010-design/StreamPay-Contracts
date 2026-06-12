@@ -137,6 +137,19 @@ impl StreamPayContract {
         Ok(id)
     }
 
+    /// Returns the lifecycle [`Status`] of stream `id`.
+    pub fn get_status(env: Env, id: u64) -> Result<Status, Error> {
+        let stream = storage::read_stream(&env, id).ok_or(Error::StreamNotFound)?;
+        Ok(stream.status)
+    }
+
+    /// Returns `true` if stream `id` is still active (not cancelled or
+    /// completed).
+    pub fn is_active(env: Env, id: u64) -> Result<bool, Error> {
+        let stream = storage::read_stream(&env, id).ok_or(Error::StreamNotFound)?;
+        Ok(stream.status == Status::Active)
+    }
+
     /// Returns the length of stream `id`'s vesting window in seconds.
     ///
     /// This is `end - start` and is always positive for a stored stream,
