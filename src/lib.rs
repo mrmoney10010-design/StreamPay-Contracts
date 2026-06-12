@@ -163,4 +163,46 @@ impl StreamPayContract {
         events::stream_withdrawn(&env, id, &recipient, available);
         Ok(available)
     }
+
+    /// Cancels an active stream.
+    ///
+    /// The `caller` must be the stream's sender or recipient and must authorize
+    /// the call. At cancellation the recipient is paid the streamed-but-
+    /// unwithdrawn portion and the sender is refunded the unstreamed remainder.
+    pub fn cancel(env: Env, id: u64, caller: Address) -> Result<(), Error> {
+        caller.require_auth();
+
+        let mut stream = storage::read_stream(&env, id).ok_or(Error::StreamNotFound)?;
+        if caller != stream.sender && caller != stream.recipient {
+            return Err(Error::Unauthorized);
+        }
+        if stream.status == Status::Cancelled {
+            return Err(Error::AlreadyCancelled);
+        }
+
+        let now = env.ledger().timestamp();
+        let vested = vesting::vested(&stream, now)?;
+
+        // Recipient is owed the vested portion they have not yet withdrawn.
+        let recipient_paid = vested.checked_sub(stream.withdrawn).ok_or(Error::Overflow)?;
+        // Sender reclaims everything that has not vested.
+        let sender_refund = stream.total.checked_sub(vested).ok_or(Error::Overflow)?;
+
+        stream.withdrawn = vested;
+        stream.status = Status::Cancelled;
+        storage::write_stream(&env, id, &stream);
+
+        let token = storage::read_token(&env);
+        let client = token::Client::new(&env, &token);
+        let contract = env.current_contract_address();
+        if recipient_paid > 0 {
+            client.transfer(&contract, &stream.recipient, &recipient_paid);
+        }
+        if sender_refund > 0 {
+            client.transfer(&contract, &stream.sender, &sender_refund);
+        }
+
+        events::stream_cancelled(&env, id, &caller, sender_refund, recipient_paid);
+        Ok(())
+    }
 }
