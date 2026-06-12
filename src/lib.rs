@@ -50,4 +50,9 @@ impl StreamPayContract {
         }
         Ok(storage::read_token(&env))
     }
+
+    /// Returns the current stream counter (number of streams created).
+    pub fn stream_counter(env: Env) -> u64 {
+        storage::read_counter(&env)
+    }
 }
