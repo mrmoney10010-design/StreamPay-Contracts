@@ -20,3 +20,23 @@ fmt-check:
 .PHONY: clippy
 clippy:
 	cargo clippy --all-targets -- -D warnings
+
+.PHONY: optimize
+optimize: build
+	stellar contract optimize --wasm $(WASM)
+
+# Deploy to a network. Override NETWORK and SOURCE as needed, e.g.:
+#   make deploy NETWORK=testnet SOURCE=alice
+NETWORK ?= testnet
+SOURCE ?= default
+
+.PHONY: deploy
+deploy: build
+	stellar contract deploy \
+		--wasm $(WASM) \
+		--source $(SOURCE) \
+		--network $(NETWORK)
+
+.PHONY: clean
+clean:
+	cargo clean
