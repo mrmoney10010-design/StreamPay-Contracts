@@ -135,6 +135,16 @@ impl StreamPayContract {
         vesting::vested(&stream, now)
     }
 
+    /// Returns the stream's vesting progress in basis points (0..=10_000).
+    ///
+    /// `0` means vesting has not started, `10_000` means it is complete. This
+    /// reflects elapsed time only and is independent of the streamed `total`.
+    pub fn progress_bps(env: Env, id: u64) -> Result<u32, Error> {
+        let stream = storage::read_stream(&env, id).ok_or(Error::StreamNotFound)?;
+        let now = env.ledger().timestamp();
+        Ok(vesting::progress_bps(&stream, now))
+    }
+
     /// Returns the amount of stream `id` that has not yet vested.
     ///
     /// This is `total - streamed_amount(id)` at the current ledger timestamp:

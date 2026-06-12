@@ -37,3 +37,21 @@ pub fn unvested(stream: &Stream, now: u64) -> Result<i128, Error> {
     let vested = vested(stream, now)?;
     stream.total.checked_sub(vested).ok_or(Error::Overflow)
 }
+
+/// Returns how far the stream's time window has progressed, in basis points.
+///
+/// The result is `0` before `start`, `10_000` (100%) at or after `end`, and a
+/// linear interpolation in between. Unlike [`vested`], this depends only on the
+/// time window and not on `total`, so it never overflows.
+pub fn progress_bps(stream: &Stream, now: u64) -> u32 {
+    if now <= stream.start {
+        return 0;
+    }
+    if now >= stream.end {
+        return 10_000;
+    }
+
+    let elapsed = (now - stream.start) as u128;
+    let duration = (stream.end - stream.start) as u128;
+    (elapsed * 10_000 / duration) as u32
+}
