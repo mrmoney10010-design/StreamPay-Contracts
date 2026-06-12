@@ -135,6 +135,19 @@ impl StreamPayContract {
         vesting::vested(&stream, now)
     }
 
+    /// Returns the amount currently available to withdraw for stream `id`.
+    ///
+    /// This is the vested amount minus what the recipient has already
+    /// withdrawn, i.e. the value that a [`Self::withdraw`] call would transfer
+    /// at the current ledger timestamp.
+    pub fn withdrawable_amount(env: Env, id: u64) -> Result<i128, Error> {
+        let stream = storage::read_stream(&env, id).ok_or(Error::StreamNotFound)?;
+        let now = env.ledger().timestamp();
+        let vested = vesting::vested(&stream, now)?;
+        let available = vested.checked_sub(stream.withdrawn).ok_or(Error::Overflow)?;
+        Ok(if available > 0 { available } else { 0 })
+    }
+
     /// Withdraws the vested-but-unwithdrawn balance of stream `id` to its
     /// `recipient`.
     ///
