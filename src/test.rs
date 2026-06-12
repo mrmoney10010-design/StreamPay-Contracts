@@ -223,3 +223,22 @@ fn test_withdraw_by_non_recipient_fails() {
     let res = s.contract.try_withdraw(&id, &stranger);
     assert_eq!(res, Err(Ok(Error::Unauthorized)));
 }
+
+#[test]
+fn test_cancel_splits_funds_between_parties() {
+    let s = setup();
+    let id = s
+        .contract
+        .create_stream(&s.sender, &s.recipient, &1_000, &100, &200);
+
+    // Cancel at the midpoint: recipient gets 500 vested, sender refunds 500.
+    set_time(&s.env, 150);
+    s.contract.cancel(&id, &s.sender);
+
+    assert_eq!(s.token.balance(&s.recipient), 500);
+    assert_eq!(s.token.balance(&s.sender), 1_000_000 - 500);
+    assert_eq!(s.token.balance(&s.contract.address), 0);
+
+    let stream = s.contract.get_stream(&id);
+    assert_eq!(stream.status, Status::Cancelled);
+}
