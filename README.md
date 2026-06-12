@@ -113,6 +113,36 @@ stellar contract invoke \
   --token <TOKEN_SAC_ADDRESS>
 ```
 
+## Stream lifecycle
+
+A stream moves through three statuses:
+
+```
+Active ──fully withdrawn──▶ Completed
+  │
+  └──────cancel───────────▶ Cancelled
+```
+
+- **Active** — the default after `create_stream`. Funds vest over time, the
+  recipient may `withdraw`, and the sender may `top_up` or `extend_stream`.
+- **Completed** — set automatically once the recipient has withdrawn the entire
+  total. Further withdrawals return `AlreadyCompleted`.
+- **Cancelled** — set by `cancel`. The vested-but-unwithdrawn portion is paid to
+  the recipient and the unvested remainder is refunded to the sender. Further
+  withdrawals return `AlreadyCancelled`.
+
+Once a stream leaves the `Active` status it is terminal: `top_up` and
+`extend_stream` return `StreamNotActive`.
+
+## Invariants
+
+- A stream's escrowed balance is always `total - withdrawn` while active; the
+  contract never holds less than the sum of its active streams' balances.
+- `streamed_amount + remaining_amount == total` at every timestamp.
+- `withdrawn` only ever increases and never exceeds `total`.
+- All token math is checked, so an overflow returns `Overflow` rather than
+  wrapping.
+
 ## License
 
 Licensed under the [MIT License](LICENSE).
