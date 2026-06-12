@@ -42,4 +42,12 @@ impl StreamPayContract {
         }
         Ok(storage::read_admin(&env))
     }
+
+    /// Returns the streamed token address, or [`Error::NotInitialized`].
+    pub fn get_token(env: Env) -> Result<Address, Error> {
+        if !storage::has_admin(&env) {
+            return Err(Error::NotInitialized);
+        }
+        Ok(storage::read_token(&env))
+    }
 }
