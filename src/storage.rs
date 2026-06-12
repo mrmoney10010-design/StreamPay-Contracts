@@ -51,3 +51,16 @@ pub fn read_token(env: &Env) -> Address {
 pub fn write_token(env: &Env, token: &Address) {
     env.storage().instance().set(&DataKey::Token, token);
 }
+
+/// Reads the current stream counter, defaulting to zero.
+pub fn read_counter(env: &Env) -> u64 {
+    env.storage()
+        .instance()
+        .get(&DataKey::Counter)
+        .unwrap_or(0)
+}
+
+/// Writes the stream counter into instance storage.
+pub fn write_counter(env: &Env, counter: u64) {
+    env.storage().instance().set(&DataKey::Counter, &counter);
+}
