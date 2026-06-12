@@ -177,6 +177,25 @@ impl StreamPayContract {
         Ok(vesting::progress_bps(&stream, now))
     }
 
+    /// Returns the share of stream `id`'s total that has been withdrawn, in
+    /// basis points (0..=10_000).
+    ///
+    /// `0` means nothing has been pulled yet and `10_000` means the recipient
+    /// has withdrawn the entire escrowed total. Unlike [`Self::progress_bps`],
+    /// this reflects withdrawals rather than elapsed time.
+    pub fn percent_withdrawn(env: Env, id: u64) -> Result<u32, Error> {
+        let stream = storage::read_stream(&env, id).ok_or(Error::StreamNotFound)?;
+        if stream.total <= 0 {
+            return Ok(0);
+        }
+        let bps = stream
+            .withdrawn
+            .checked_mul(10_000)
+            .ok_or(Error::Overflow)?
+            / stream.total;
+        Ok(bps as u32)
+    }
+
     /// Returns the amount of stream `id` that has not yet vested.
     ///
     /// This is `total - streamed_amount(id)` at the current ledger timestamp:
