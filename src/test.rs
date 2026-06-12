@@ -195,3 +195,31 @@ fn test_double_withdraw_only_pays_new_vesting() {
     assert_eq!(s.contract.withdraw(&id, &s.recipient), 250);
     assert_eq!(s.token.balance(&s.recipient), 750);
 }
+
+#[test]
+fn test_withdraw_full_after_end_completes_stream() {
+    let s = setup();
+    let id = s
+        .contract
+        .create_stream(&s.sender, &s.recipient, &1_000, &100, &200);
+
+    set_time(&s.env, 300);
+    assert_eq!(s.contract.withdraw(&id, &s.recipient), 1_000);
+    assert_eq!(s.token.balance(&s.recipient), 1_000);
+
+    let stream = s.contract.get_stream(&id);
+    assert_eq!(stream.status, Status::Completed);
+}
+
+#[test]
+fn test_withdraw_by_non_recipient_fails() {
+    let s = setup();
+    let id = s
+        .contract
+        .create_stream(&s.sender, &s.recipient, &1_000, &100, &200);
+
+    set_time(&s.env, 150);
+    let stranger = Address::generate(&s.env);
+    let res = s.contract.try_withdraw(&id, &stranger);
+    assert_eq!(res, Err(Ok(Error::Unauthorized)));
+}
