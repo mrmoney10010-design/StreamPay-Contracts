@@ -9,6 +9,7 @@ mod error;
 mod events;
 mod storage;
 mod types;
+mod vesting;
 
 use soroban_sdk::contract;
 
