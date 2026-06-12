@@ -49,6 +49,18 @@ vested(t) = total * (t - start) / (end - start)            otherwise
 Integer division truncates, so dust may accrue at the end of the window; it is
 always fully released once `t >= end`.
 
+## Events
+
+The contract publishes an event for every lifecycle change so off-chain
+indexers can follow streams without polling. Each event's topics carry the
+event name and the stream id.
+
+| Topic | Data | Emitted by |
+| --- | --- | --- |
+| `("created", id)` | `(sender, recipient, total)` | `create_stream` |
+| `("withdrawn", id)` | `(recipient, amount)` | `withdraw` |
+| `("cancelled", id)` | `(caller, sender_refund, recipient_paid)` | `cancel` |
+
 ## Build
 
 Install the Rust `wasm32-unknown-unknown` target and the
