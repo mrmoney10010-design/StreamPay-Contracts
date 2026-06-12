@@ -14,6 +14,27 @@ pub enum Status {
     Completed = 2,
 }
 
+/// A computed, point-in-time snapshot of a stream's vesting figures.
+///
+/// Returned by view calls so off-chain clients can fetch the headline numbers
+/// in a single round trip instead of combining several getters.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StreamSummary {
+    /// The total amount escrowed for the stream.
+    pub total: i128,
+    /// The amount vested so far at the queried timestamp.
+    pub vested: i128,
+    /// The amount already withdrawn by the recipient.
+    pub withdrawn: i128,
+    /// The vested-but-unwithdrawn amount available to the recipient now.
+    pub withdrawable: i128,
+    /// Vesting progress in basis points (0..=10_000) by elapsed time.
+    pub progress_bps: u32,
+    /// The current lifecycle status of the stream.
+    pub status: Status,
+}
+
 /// A linear payment stream.
 ///
 /// Tokens vest linearly from `start` to `end`. The escrowed `total` is held by

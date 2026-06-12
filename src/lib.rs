@@ -15,7 +15,7 @@ mod vesting;
 mod test;
 
 use crate::error::Error;
-use crate::types::{Status, Stream};
+use crate::types::{Status, Stream, StreamSummary};
 use soroban_sdk::{contract, contractimpl, contractmeta, token, Address, Env};
 
 // Embed human-readable metadata into the compiled contract.
@@ -283,6 +283,24 @@ impl StreamPayContract {
         let stream = storage::read_stream(&env, id).ok_or(Error::StreamNotFound)?;
         let now = env.ledger().timestamp();
         vesting::unvested(&stream, now)
+    }
+
+    /// Returns a [`StreamSummary`] of stream `id` at the current ledger
+    /// timestamp.
+    ///
+    /// This bundles the total, vested, withdrawn, withdrawable, progress, and
+    /// status so a client can read them all in one call.
+    pub fn get_summary(env: Env, id: u64) -> Result<StreamSummary, Error> {
+        let stream = storage::read_stream(&env, id).ok_or(Error::StreamNotFound)?;
+        let now = env.ledger().timestamp();
+        Ok(StreamSummary {
+            total: stream.total,
+            vested: vesting::vested(&stream, now)?,
+            withdrawn: stream.withdrawn,
+            withdrawable: vesting::withdrawable(&stream, now)?,
+            progress_bps: vesting::progress_bps(&stream, now),
+            status: stream.status,
+        })
     }
 
     /// Returns the amount currently available to withdraw for stream `id`.
