@@ -92,3 +92,21 @@ fn test_create_stream_escrows_and_returns_id() {
     assert_eq!(stream.end, 200);
     assert_eq!(stream.status, Status::Active);
 }
+
+#[test]
+fn test_create_stream_rejects_zero_amount() {
+    let s = setup();
+    let res = s
+        .contract
+        .try_create_stream(&s.sender, &s.recipient, &0, &100, &200);
+    assert_eq!(res, Err(Ok(Error::InvalidAmount)));
+}
+
+#[test]
+fn test_create_stream_rejects_bad_time_range() {
+    let s = setup();
+    let res = s
+        .contract
+        .try_create_stream(&s.sender, &s.recipient, &1_000, &200, &100);
+    assert_eq!(res, Err(Ok(Error::InvalidTimeRange)));
+}
