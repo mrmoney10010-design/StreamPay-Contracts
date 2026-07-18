@@ -638,3 +638,75 @@ fn test_views_before_initialize_fail() {
     assert_eq!(contract.try_get_admin(), Err(Ok(Error::NotInitialized)));
     assert_eq!(contract.try_get_token(), Err(Ok(Error::NotInitialized)));
 }
+
+// --- #47: constants module + centralized amount-limit validation -----------
+
+#[test]
+fn test_min_stream_amount_constant() {
+    // The documented floor must be exactly 1 so dust (0) streams are rejected.
+    assert_eq!(crate::MIN_STREAM_AMOUNT, 1);
+}
+
+#[test]
+fn test_create_stream_accepts_minimum_amount() {
+    let s = setup();
+    // Exactly the minimum accepted amount (1) must succeed, not error.
+    let id = s
+        .contract
+        .create_stream(&s.sender, &s.recipient, &1, &100, &200);
+    assert_eq!(id, 0);
+    assert_eq!(s.contract.get_stream(&id).total, 1);
+}
+
+#[test]
+fn test_create_stream_rejects_below_minimum() {
+    let s = setup();
+    // Zero is below MIN_STREAM_AMOUNT and must be rejected as InvalidAmount
+    // (the central `is_valid_amount` guard).
+    let res = s
+        .contract
+        .try_create_stream(&s.sender, &s.recipient, &0, &100, &200);
+    assert_eq!(res, Err(Ok(Error::InvalidAmount)));
+}
+
+#[test]
+fn test_create_stream_rejects_negative_amount() {
+    let s = setup();
+    // Negative amounts are non-positive and must be rejected identically.
+    let res = s
+        .contract
+        .try_create_stream(&s.sender, &s.recipient, &-5, &100, &200);
+    assert_eq!(res, Err(Ok(Error::InvalidAmount)));
+}
+
+#[test]
+fn test_top_up_accepts_minimum_amount() {
+    let s = setup();
+    let id = s
+        .contract
+        .create_stream(&s.sender, &s.recipient, &1_000, &100, &200);
+    // top_up also routes through the same amount validation; 1 is valid.
+    assert_eq!(s.contract.top_up(&id, &s.sender, &1), 1_001);
+}
+
+#[test]
+fn test_top_up_rejects_below_minimum() {
+    let s = setup();
+    let id = s
+        .contract
+        .create_stream(&s.sender, &s.recipient, &1_000, &100, &200);
+    assert_eq!(
+        s.contract.try_top_up(&id, &s.sender, &0),
+        Err(Ok(Error::InvalidAmount))
+    );
+}
+
+#[test]
+fn test_is_valid_amount_helper() {
+    use crate::constants::is_valid_amount;
+    // Only amounts >= MIN_STREAM_AMOUNT (1) are valid; 0 and negatives are not.
+    assert!(is_valid_amount(1));
+    assert!(is_valid_amount(1_000));
+    assert!(!is_valid_amount(0));
+    assert!(!is_valid_amount(-1));
+}

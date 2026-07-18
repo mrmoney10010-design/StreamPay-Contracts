@@ -9,6 +9,7 @@ pub mod error;
 mod events;
 mod storage;
 pub mod types;
+pub mod constants;
 mod vesting;
 
 #[cfg(test)]
@@ -26,11 +27,14 @@ contractmeta!(
 );
 contractmeta!(key = "version", val = "0.2.0");
 
-/// The smallest `total_amount` accepted by [`StreamPayContract::create_stream`].
+/// Re-export of the contract's compile-time limits and validation helpers.
 ///
-/// Requiring a minimum avoids dust streams whose per-second vesting truncates
-/// to zero and that only bloat persistent storage.
-pub const MIN_STREAM_AMOUNT: i128 = 1;
+/// Historically `MIN_STREAM_AMOUNT` was declared inline in `lib.rs`; it now
+/// lives in [`crate::constants`] so the contract's bounds are documented in one
+/// place. The re-export preserves the original path for downstream callers.
+pub use crate::constants::MIN_STREAM_AMOUNT;
+
+use crate::constants::is_valid_amount;
 
 /// The StreamPay contract type.
 #[contract]
@@ -97,7 +101,7 @@ impl StreamPayContract {
         }
         sender.require_auth();
 
-        if total_amount <= 0 {
+        if !is_valid_amount(total_amount) {
             return Err(Error::InvalidAmount);
         }
         if total_amount < MIN_STREAM_AMOUNT {
@@ -146,7 +150,7 @@ impl StreamPayContract {
     pub fn top_up(env: Env, id: u64, sender: Address, amount: i128) -> Result<i128, Error> {
         sender.require_auth();
 
-        if amount <= 0 {
+        if !is_valid_amount(amount) {
             return Err(Error::InvalidAmount);
         }
 
