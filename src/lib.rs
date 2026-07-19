@@ -29,10 +29,10 @@ contractmeta!(key = "version", val = "0.2.0");
 
 /// Re-export of the contract's compile-time limits and validation helpers.
 ///
-/// Historically `MIN_STREAM_AMOUNT` was declared inline in `lib.rs`; it now
-/// lives in [`crate::constants`] so the contract's bounds are documented in one
-/// place. The re-export preserves the original path for downstream callers.
-pub use crate::constants::MIN_STREAM_AMOUNT;
+/// Contract-level validation and governance limits are declared in
+/// [`crate::constants`]. Re-exporting them preserves convenient downstream
+/// access through the crate root.
+pub use crate::constants::{ADMIN_TIMELOCK_DELAY, MIN_STREAM_AMOUNT};
 
 use crate::constants::is_valid_amount;
 
@@ -63,6 +63,98 @@ impl StreamPayContract {
             return Err(Error::NotInitialized);
         }
         Ok(storage::read_admin(&env))
+    }
+
+    /// Returns the address in the scheduled admin transfer, if any.
+    pub fn get_pending_admin(env: Env) -> Result<Option<Address>, Error> {
+        if !storage::has_admin(&env) {
+            return Err(Error::NotInitialized);
+        }
+        Ok(storage::read_pending_admin(&env))
+    }
+
+    /// Returns when the scheduled admin transfer may execute, if any.
+    pub fn get_admin_action_execute_after(env: Env) -> Result<Option<u64>, Error> {
+        if !storage::has_admin(&env) {
+            return Err(Error::NotInitialized);
+        }
+        Ok(storage::read_admin_action_execute_after(&env))
+    }
+
+    /// Schedules a transfer of the admin role after [`ADMIN_TIMELOCK_DELAY`].
+    ///
+    /// Only the current admin may schedule the transfer. Scheduling a new
+    /// transfer replaces a previously scheduled one. Once the delay has
+    /// elapsed, anyone may call [`Self::execute_admin_transfer`] to execute it.
+    pub fn schedule_admin_transfer(
+        env: Env,
+        admin: Address,
+        new_admin: Address,
+    ) -> Result<u64, Error> {
+        if !storage::has_admin(&env) {
+            return Err(Error::NotInitialized);
+        }
+        admin.require_auth();
+        if admin != storage::read_admin(&env) {
+            return Err(Error::Unauthorized);
+        }
+        if new_admin == admin {
+            return Err(Error::InvalidAdminAction);
+        }
+
+        let execute_after = env
+            .ledger()
+            .timestamp()
+            .checked_add(ADMIN_TIMELOCK_DELAY)
+            .ok_or(Error::Overflow)?;
+        storage::write_pending_admin_action(&env, &new_admin, execute_after);
+        storage::extend_instance(&env);
+        events::admin_transfer_scheduled(&env, &admin, &new_admin, execute_after);
+        Ok(execute_after)
+    }
+
+    /// Executes the scheduled admin transfer after its timelock has elapsed.
+    ///
+    /// Execution is permissionless so an approved governance change cannot be
+    /// blocked if the current admin becomes unavailable.
+    pub fn execute_admin_transfer(env: Env) -> Result<(), Error> {
+        if !storage::has_admin(&env) {
+            return Err(Error::NotInitialized);
+        }
+        let pending_admin = storage::read_pending_admin(&env).ok_or(Error::NoPendingAdminAction)?;
+        let execute_after = storage::read_admin_action_execute_after(&env)
+            .ok_or(Error::NoPendingAdminAction)?;
+        if env.ledger().timestamp() < execute_after {
+            return Err(Error::TimelockNotExpired);
+        }
+
+        let previous_admin = storage::read_admin(&env);
+        storage::write_admin(&env, &pending_admin);
+        storage::clear_pending_admin_action(&env);
+        storage::extend_instance(&env);
+        events::admin_transfer_executed(&env, &previous_admin, &pending_admin);
+        Ok(())
+    }
+
+    /// Cancels the currently scheduled admin transfer.
+    ///
+    /// Only the current admin may cancel a pending transfer.
+    pub fn cancel_admin_transfer(env: Env, admin: Address) -> Result<(), Error> {
+        if !storage::has_admin(&env) {
+            return Err(Error::NotInitialized);
+        }
+        admin.require_auth();
+        if admin != storage::read_admin(&env) {
+            return Err(Error::Unauthorized);
+        }
+        if storage::read_pending_admin(&env).is_none() {
+            return Err(Error::NoPendingAdminAction);
+        }
+
+        storage::clear_pending_admin_action(&env);
+        storage::extend_instance(&env);
+        events::admin_transfer_cancelled(&env, &admin);
+        Ok(())
     }
 
     /// Returns the streamed token address, or [`Error::NotInitialized`].

@@ -28,6 +28,10 @@ pub enum DataKey {
     Token,
     /// The monotonically increasing stream counter (instance).
     Counter,
+    /// The admin address scheduled to replace the current admin (instance).
+    PendingAdmin,
+    /// Ledger timestamp at which the pending admin transfer may execute (instance).
+    AdminActionExecuteAfter,
     /// A stream stored by its id (persistent).
     Stream(u64),
 }
@@ -48,6 +52,34 @@ pub fn read_admin(env: &Env) -> Address {
 /// Writes the admin address into instance storage.
 pub fn write_admin(env: &Env, admin: &Address) {
     env.storage().instance().set(&DataKey::Admin, admin);
+}
+
+/// Returns the pending admin transfer, if one has been scheduled.
+pub fn read_pending_admin(env: &Env) -> Option<Address> {
+    env.storage().instance().get(&DataKey::PendingAdmin)
+}
+
+/// Returns the timestamp at which the pending admin transfer may execute.
+pub fn read_admin_action_execute_after(env: &Env) -> Option<u64> {
+    env.storage()
+        .instance()
+        .get(&DataKey::AdminActionExecuteAfter)
+}
+
+/// Stores a pending admin transfer and its execution timestamp.
+pub fn write_pending_admin_action(env: &Env, admin: &Address, execute_after: u64) {
+    env.storage().instance().set(&DataKey::PendingAdmin, admin);
+    env.storage()
+        .instance()
+        .set(&DataKey::AdminActionExecuteAfter, &execute_after);
+}
+
+/// Clears the scheduled admin transfer, if one exists.
+pub fn clear_pending_admin_action(env: &Env) {
+    env.storage().instance().remove(&DataKey::PendingAdmin);
+    env.storage()
+        .instance()
+        .remove(&DataKey::AdminActionExecuteAfter);
 }
 
 /// Reads the streamed token address from instance storage.

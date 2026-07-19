@@ -3,7 +3,34 @@
 //! Events let off-chain indexers track stream lifecycle changes. Each event is
 //! published with a descriptive topic tuple and a relevant data payload.
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{symbol_short, Address, Env, Symbol};
+
+/// Publishes an `admin_scheduled` event when an admin transfer is queued.
+pub fn admin_transfer_scheduled(
+    env: &Env,
+    current_admin: &Address,
+    pending_admin: &Address,
+    execute_after: u64,
+) {
+    env.events().publish(
+        (Symbol::new(env, "admin_scheduled"),),
+        (current_admin.clone(), pending_admin.clone(), execute_after),
+    );
+}
+
+/// Publishes an `admin_transfer` event when a timelocked transfer executes.
+pub fn admin_transfer_executed(env: &Env, previous_admin: &Address, new_admin: &Address) {
+    env.events().publish(
+        (Symbol::new(env, "admin_transfer"),),
+        (previous_admin.clone(), new_admin.clone()),
+    );
+}
+
+/// Publishes an `admin_cancelled` event when a scheduled transfer is cancelled.
+pub fn admin_transfer_cancelled(env: &Env, admin: &Address) {
+    env.events()
+        .publish((Symbol::new(env, "admin_cancelled"),), admin.clone());
+}
 
 /// Publishes a `created` event when a new stream is opened.
 pub fn stream_created(

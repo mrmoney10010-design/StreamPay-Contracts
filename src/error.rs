@@ -33,4 +33,10 @@ pub enum Error {
     AmountBelowMinimum = 12,
     /// The stream is not active, so the requested operation is not allowed.
     StreamNotActive = 13,
+    /// No admin action has been scheduled.
+    NoPendingAdminAction = 14,
+    /// The scheduled admin action cannot execute until its timelock expires.
+    TimelockNotExpired = 15,
+    /// The requested admin action would not change contract administration.
+    InvalidAdminAction = 16,
 }
