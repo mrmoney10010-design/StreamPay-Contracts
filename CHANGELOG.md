@@ -5,6 +5,15 @@ All notable changes to StreamPay are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `constants` module centralizing the contract's tunable limits and validation
+  helpers (`MIN_STREAM_AMOUNT`, `MIN_VALID_AMOUNT`, `is_valid_amount`). Both
+  `create_stream` and `top_up` now route their amount checks through this single
+  source of truth, so the two entry points enforce identical bounds.
+
 ## [0.2.0]
 
 ### Added
