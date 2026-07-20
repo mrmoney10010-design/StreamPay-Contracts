@@ -2,6 +2,24 @@
 
 use soroban_sdk::{contracttype, Address};
 
+/// Parameters for one stream in a [`crate::StreamPayContract::create_stream_batch`]
+/// call.
+///
+/// Every item in a batch shares the entrypoint's sender, while allowing a
+/// distinct recipient, amount, and vesting window.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StreamRequest {
+    /// The account receiving this stream.
+    pub recipient: Address,
+    /// The amount to escrow for this stream.
+    pub total_amount: i128,
+    /// The ledger timestamp at which vesting begins.
+    pub start_time: u64,
+    /// The ledger timestamp at which vesting completes.
+    pub end_time: u64,
+}
+
 /// Lifecycle status of a payment stream.
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

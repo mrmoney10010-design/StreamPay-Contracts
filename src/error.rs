@@ -41,4 +41,6 @@ pub enum Error {
     InvalidAdminAction = 16,
     /// The operation would push the total escrowed supply above the global cap.
     SupplyCapExceeded = 14,
+    /// A batch entrypoint was called without any operations.
+    EmptyBatch = 17,
 }

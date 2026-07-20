@@ -26,6 +26,7 @@ split the funds fairly between what has and has not yet vested.
 | --- | --- |
 | `initialize(admin, token)` | One-time setup: records the admin and the streamed token (SAC). |
 | `create_stream(sender, recipient, total_amount, start_time, end_time) -> u64` | Escrows `total_amount` from `sender` and opens a stream; returns its id. |
+| `create_stream_batch(sender, requests: Vec<StreamRequest>) -> Vec<u64>` | Atomically opens several streams from one sender; validates all requests and escrows their aggregate amount in one token transfer. |
 | `top_up(id, sender, amount) -> i128` | Sender escrows `amount` more into an active stream; returns the new total. |
 | `extend_stream(id, sender, new_end)` | Sender pushes back an active stream's `end` time, slowing vesting. |
 | `streamed_amount(id) -> i128` | View: amount vested so far based on the ledger timestamp. |
@@ -62,6 +63,15 @@ vested(t) = total * (t - start) / (end - start)            otherwise
 
 Integer division truncates, so dust may accrue at the end of the window; it is
 always fully released once `t >= end`.
+
+### Batch stream creation
+
+`create_stream_batch` accepts a single sender and a `Vec<StreamRequest>`, where
+each request provides `recipient`, `total_amount`, `start_time`, and `end_time`.
+The sender authorizes the invocation once. The contract validates every request
+before it transfers the summed escrow amount; if any request is invalid, the
+whole call fails and creates no streams. Successful requests receive consecutive
+stream IDs and each produces the usual `created` event.
 
 ## Events
 

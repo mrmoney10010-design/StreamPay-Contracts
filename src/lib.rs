@@ -17,8 +17,8 @@ mod vesting;
 mod test;
 
 use crate::error::Error;
-use crate::types::{Status, Stream, StreamSummary};
-use soroban_sdk::{contract, contractimpl, contractmeta, token, Address, Env};
+use crate::types::{Status, Stream, StreamRequest, StreamSummary};
+use soroban_sdk::{contract, contractimpl, contractmeta, token, Address, Env, Vec};
 
 // Embed human-readable metadata into the compiled contract.
 contractmeta!(key = "name", val = "StreamPay");
@@ -294,6 +294,84 @@ impl StreamPayContract {
 
         events::stream_created(&env, id, &sender, &recipient, total_amount);
         Ok(id)
+    }
+
+    /// Creates multiple streams funded by one `sender` in a single atomic
+    /// invocation and returns their consecutive ids.
+    ///
+    /// The sender authorizes once. Every request is validated before the
+    /// aggregate escrow transfer occurs, so an invalid request leaves no
+    /// partial streams or token transfers behind. Each created stream emits
+    /// the normal `created` event.
+    pub fn create_stream_batch(
+        env: Env,
+        sender: Address,
+        requests: Vec<StreamRequest>,
+    ) -> Result<Vec<u64>, Error> {
+        if !storage::has_admin(&env) {
+            return Err(Error::NotInitialized);
+        }
+        sender.require_auth();
+        if requests.is_empty() {
+            return Err(Error::EmptyBatch);
+        }
+
+        let now = env.ledger().timestamp();
+        let mut aggregate_amount = 0_i128;
+        let mut index = 0_u32;
+        while index < requests.len() {
+            let request = requests.get(index).unwrap();
+            if !is_valid_amount(request.total_amount) {
+                return Err(Error::InvalidAmount);
+            }
+            if request.total_amount < MIN_STREAM_AMOUNT {
+                return Err(Error::AmountBelowMinimum);
+            }
+            if request.end_time <= request.start_time {
+                return Err(Error::InvalidTimeRange);
+            }
+            if request.end_time <= now {
+                return Err(Error::EndTimeInPast);
+            }
+            aggregate_amount = aggregate_amount
+                .checked_add(request.total_amount)
+                .ok_or(Error::Overflow)?;
+            index += 1;
+        }
+
+        let count = requests.len() as u64;
+        let first_id = storage::read_counter(&env);
+        let next_counter = first_id.checked_add(count).ok_or(Error::Overflow)?;
+
+        let token = storage::read_token(&env);
+        token::Client::new(&env, &token).transfer(
+            &sender,
+            &env.current_contract_address(),
+            &aggregate_amount,
+        );
+
+        let mut ids = Vec::new(&env);
+        index = 0;
+        while index < requests.len() {
+            let request = requests.get(index).unwrap();
+            let id = first_id + index as u64;
+            let stream = Stream {
+                sender: sender.clone(),
+                recipient: request.recipient.clone(),
+                total: request.total_amount,
+                withdrawn: 0,
+                start: request.start_time,
+                end: request.end_time,
+                status: Status::Active,
+            };
+            storage::write_stream(&env, id, &stream);
+            events::stream_created(&env, id, &sender, &request.recipient, request.total_amount);
+            ids.push_back(id);
+            index += 1;
+        }
+        storage::write_counter(&env, next_counter);
+        storage::extend_instance(&env);
+        Ok(ids)
     }
 
     /// Adds `amount` more tokens to an active stream `id` and escrows them.

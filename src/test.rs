@@ -4,11 +4,11 @@
 extern crate std;
 
 use crate::error::Error;
-use crate::types::Status;
+use crate::types::{Status, StreamRequest};
 use crate::{StreamPayContract, StreamPayContractClient};
 use soroban_sdk::testutils::{Address as _, AuthorizedFunction, Ledger};
 use soroban_sdk::token::{StellarAssetClient, TokenClient};
-use soroban_sdk::{Address, Env, IntoVal, Symbol};
+use soroban_sdk::{Address, Env, IntoVal, Symbol, Vec};
 
 /// Test fixture bundling the environment, contract client, token, and actors.
 #[allow(dead_code)]
@@ -152,6 +152,77 @@ fn test_create_stream_escrows_and_returns_id() {
     assert_eq!(stream.start, 100);
     assert_eq!(stream.end, 200);
     assert_eq!(stream.status, Status::Active);
+}
+
+#[test]
+fn test_create_stream_batch_creates_streams_and_escrows_total() {
+    let s = setup();
+    let second_recipient = Address::generate(&s.env);
+    let requests = Vec::from_array(
+        &s.env,
+        [
+            StreamRequest {
+                recipient: s.recipient.clone(),
+                total_amount: 1_000,
+                start_time: 100,
+                end_time: 200,
+            },
+            StreamRequest {
+                recipient: second_recipient.clone(),
+                total_amount: 2_000,
+                start_time: 150,
+                end_time: 300,
+            },
+        ],
+    );
+
+    let ids = s.contract.create_stream_batch(&s.sender, &requests);
+    assert_eq!(ids, Vec::from_array(&s.env, [0_u64, 1_u64]));
+    assert_eq!(s.contract.stream_counter(), 2);
+    assert_eq!(s.contract.get_stream(&0).recipient, s.recipient);
+    assert_eq!(s.contract.get_stream(&1).recipient, second_recipient);
+    assert_eq!(s.token.balance(&s.sender), 1_000_000 - 3_000);
+    assert_eq!(s.token.balance(&s.contract.address), 3_000);
+}
+
+#[test]
+fn test_create_stream_batch_rejects_invalid_request_atomically() {
+    let s = setup();
+    let requests = Vec::from_array(
+        &s.env,
+        [
+            StreamRequest {
+                recipient: s.recipient.clone(),
+                total_amount: 1_000,
+                start_time: 100,
+                end_time: 200,
+            },
+            StreamRequest {
+                recipient: Address::generate(&s.env),
+                total_amount: 0,
+                start_time: 100,
+                end_time: 200,
+            },
+        ],
+    );
+
+    assert_eq!(
+        s.contract.try_create_stream_batch(&s.sender, &requests),
+        Err(Ok(Error::InvalidAmount))
+    );
+    assert_eq!(s.contract.stream_counter(), 0);
+    assert_eq!(s.token.balance(&s.sender), 1_000_000);
+    assert_eq!(s.token.balance(&s.contract.address), 0);
+}
+
+#[test]
+fn test_create_stream_batch_rejects_empty_batch() {
+    let s = setup();
+    assert_eq!(
+        s.contract
+            .try_create_stream_batch(&s.sender, &Vec::<StreamRequest>::new(&s.env)),
+        Err(Ok(Error::EmptyBatch))
+    );
 }
 
 #[test]
