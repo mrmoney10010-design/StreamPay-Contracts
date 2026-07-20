@@ -143,6 +143,86 @@ Once a stream leaves the `Active` status it is terminal: `top_up` and
 - All token math is checked, so an overflow returns `Overflow` rather than
   wrapping.
 
+## Resource Costs
+
+Soroban charges for every transaction based on three resource dimensions:
+**instructions**, **read/write bytes**, and **storage rent**. Understanding
+these dimensions helps callers set appropriate resource limits and fee budgets.
+
+### Storage model
+
+StreamPay uses two Soroban storage tiers:
+
+| Tier | Keys | Expiry |
+| --- | --- | --- |
+| Instance | `Admin`, `Token`, `Counter` | Shared with the contract instance; bumped on every write. |
+| Persistent | `Stream(id)` one entry per stream | Extended on every `write_stream` call. |
+
+Instance storage is cheap per byte because all keys share a single ledger
+entry. Persistent entries cost more to maintain but survive indefinitely as
+long as they are accessed regularly.
+
+### TTL and rent
+
+Soroban ledger entries have a TTL measured in ledgers. Once an entry's TTL
+reaches zero the network can evict it, making it unreadable until it is
+restored (at additional cost).
+
+StreamPay proactively extends TTLs whenever it writes storage:
+
+| Constant | Value | Approximate real time (at 5 s/ledger) |
+| --- | --- | --- |
+| `BUMP_THRESHOLD` | 100,000 ledgers | ~6 days |
+| `BUMP_EXTEND` | 518,400 ledgers | ~30 days |
+
+An entry whose remaining TTL is still above `BUMP_THRESHOLD` is not touched,
+so callers do not pay an extension fee on every read. Any entry accessed at
+least once a month is guaranteed to stay alive. Abandoned streams will
+eventually be evicted by the network and their rent reclaimed.
+
+### Per-operation resource costs
+
+The table below gives rough instruction-budget and byte-footprint guidance.
+Exact figures vary by network configuration and SDK version; always simulate
+the transaction before submitting.
+
+| Operation | Storage reads | Storage writes | Token transfers | Notes |
+| --- | --- | --- | --- | --- |
+| `initialize` | 0 | 3 (Admin, Token, Counter) | 0 | One-time cost. |
+| `create_stream` | 2 (Token, Counter) | 2 (Stream, Counter) + instance | 1 (sender → contract) | Heaviest write path. |
+| `top_up` | 2 (Token, Stream) | 1 (Stream) + instance | 1 (sender → contract) | |
+| `extend_stream` | 1 (Stream) | 1 (Stream) + instance | 0 | |
+| `withdraw` | 2 (Token, Stream) | 1 (Stream) | 1 (contract → recipient) | |
+| `cancel` | 2 (Token, Stream) | 1 (Stream) | 0–2 (depends on balances) | Up to two transfers. |
+| View functions | 1 (Stream) | 0 | 0 | Read-only; lowest cost. |
+
+`get_summary` combines several view calculations into a single read, making
+it cheaper in aggregate than calling each getter individually.
+
+### Fee estimation
+
+Use the Stellar CLI's simulate flag to get a precise fee breakdown before
+submitting:
+
+```bash
+stellar contract invoke \
+  --id <CONTRACT_ID> \
+  --source alice \
+  --network testnet \
+  --simulate-only \
+  -- create_stream \
+  --sender <SENDER> \
+  --recipient <RECIPIENT> \
+  --total_amount 1000000 \
+  --start_time 1700000000 \
+  --end_time 1702592000
+```
+
+See [docs/gas-and-fees.md](docs/gas-and-fees.md) for deeper coverage of the
+Soroban fee model, [docs/resource-limits.md](docs/resource-limits.md) for
+instruction-budget limits, and [docs/ttl-and-rent.md](docs/ttl-and-rent.md)
+for the full TTL and rent strategy.
+
 ## License
 
 Licensed under the [MIT License](LICENSE).

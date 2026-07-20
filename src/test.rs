@@ -710,3 +710,19 @@ fn test_is_valid_amount_helper() {
     assert!(!is_valid_amount(0));
     assert!(!is_valid_amount(-1));
 }
+
+// --- README content contract -----------------------------------------------
+
+/// Verify that the README contains a "Resource Costs" section.
+///
+/// This test acts as a lightweight documentation contract: if the section is
+/// accidentally deleted or renamed, the test fails and draws attention to the
+/// missing content before a PR is merged.
+#[test]
+fn test_readme_contains_resource_costs_section() {
+    let readme = include_str!("../README.md");
+    assert!(
+        readme.contains("## Resource Costs"),
+        "README.md must contain a '## Resource Costs' section"
+    );
+}
