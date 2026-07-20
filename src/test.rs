@@ -1082,4 +1082,18 @@ fn test_supply_recovers_after_full_withdraw_allowing_new_stream() {
         .create_stream(&s.sender, &s.recipient, &500, &400, &500);
     assert_eq!(new_id, 1);
     assert_eq!(s.contract.get_total_supply(), 500);
+// --- README content contract -----------------------------------------------
+
+/// Verify that the README contains a "Resource Costs" section.
+///
+/// This test acts as a lightweight documentation contract: if the section is
+/// accidentally deleted or renamed, the test fails and draws attention to the
+/// missing content before a PR is merged.
+#[test]
+fn test_readme_contains_resource_costs_section() {
+    let readme = include_str!("../README.md");
+    assert!(
+        readme.contains("## Resource Costs"),
+        "README.md must contain a '## Resource Costs' section"
+    );
 }
