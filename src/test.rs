@@ -1097,3 +1097,92 @@ fn test_readme_contains_resource_costs_section() {
         "README.md must contain a '## Resource Costs' section"
     );
 }
+// --- TTL Expiry Tests ------------------------------------------------------
+
+#[test]
+fn test_instance_ttl_bump() {
+    let s = setup();
+    // After initialize, instance TTL should be extended to BUMP_EXTEND.
+    s.env.as_contract(&s.contract.address, || {
+        // We use `.get_ttl()` which is typical for soroban-sdk storage inspect methods in test environments, 
+        // but if it is `.ttl()`, this may need to be adjusted.
+        let ttl = s.env.storage().instance().get_ttl();
+        assert_eq!(ttl, crate::storage::BUMP_EXTEND);
+    });
+}
+
+#[test]
+fn test_persistent_ttl_bump_on_create() {
+    let s = setup();
+    let id = s.contract.create_stream(&s.sender, &s.recipient, &1_000, &100, &200);
+
+    // After create_stream, the persistent TTL for the stream should be extended.
+    s.env.as_contract(&s.contract.address, || {
+        let ttl = s.env.storage().persistent().get_ttl(&crate::storage::DataKey::Stream(id));
+        assert_eq!(ttl, crate::storage::BUMP_EXTEND);
+    });
+}
+
+#[test]
+fn test_persistent_ttl_bump_on_top_up() {
+    let s = setup();
+    let id = s.contract.create_stream(&s.sender, &s.recipient, &1_000, &100, &200);
+    
+    // Advance ledger so TTL naturally drops, then top up to bump it again.
+    s.env.ledger().with_mut(|l| l.sequence_number += 100);
+    
+    s.contract.top_up(&id, &s.sender, &500);
+
+    s.env.as_contract(&s.contract.address, || {
+        let ttl = s.env.storage().persistent().get_ttl(&crate::storage::DataKey::Stream(id));
+        assert_eq!(ttl, crate::storage::BUMP_EXTEND);
+    });
+}
+
+#[test]
+fn test_persistent_ttl_bump_on_extend_stream() {
+    let s = setup();
+    let id = s.contract.create_stream(&s.sender, &s.recipient, &1_000, &100, &200);
+    
+    s.env.ledger().with_mut(|l| l.sequence_number += 100);
+    
+    s.contract.extend_stream(&id, &s.sender, &300);
+
+    s.env.as_contract(&s.contract.address, || {
+        let ttl = s.env.storage().persistent().get_ttl(&crate::storage::DataKey::Stream(id));
+        assert_eq!(ttl, crate::storage::BUMP_EXTEND);
+    });
+}
+
+#[test]
+fn test_persistent_ttl_bump_on_withdraw() {
+    let s = setup();
+    let id = s.contract.create_stream(&s.sender, &s.recipient, &1_000, &100, &200);
+    
+    // Advance time and sequence
+    set_time(&s.env, 150);
+    s.env.ledger().with_mut(|l| l.sequence_number += 100);
+    
+    s.contract.withdraw(&id, &s.recipient);
+
+    s.env.as_contract(&s.contract.address, || {
+        let ttl = s.env.storage().persistent().get_ttl(&crate::storage::DataKey::Stream(id));
+        assert_eq!(ttl, crate::storage::BUMP_EXTEND);
+    });
+}
+
+#[test]
+fn test_persistent_ttl_bump_on_cancel() {
+    let s = setup();
+    let id = s.contract.create_stream(&s.sender, &s.recipient, &1_000, &100, &200);
+    
+    s.env.ledger().with_mut(|l| l.sequence_number += 100);
+    
+    s.contract.cancel(&id, &s.sender);
+
+    s.env.as_contract(&s.contract.address, || {
+        let ttl = s.env.storage().persistent().get_ttl(&crate::storage::DataKey::Stream(id));
+        assert_eq!(ttl, crate::storage::BUMP_EXTEND);
+    });
+}
+
