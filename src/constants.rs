@@ -13,6 +13,12 @@ use soroban_sdk::contracterror;
 /// to zero and that only bloat persistent storage.
 pub const MIN_STREAM_AMOUNT: i128 = 1;
 
+/// Minimum delay, in seconds, before a scheduled admin action can execute.
+///
+/// A full day gives users and monitoring systems time to react to a proposed
+/// governance change before it takes effect.
+pub const ADMIN_TIMELOCK_DELAY: u64 = 86_400;
+
 /// The smallest amount (streamed or topped-up) the contract accepts at all.
 ///
 /// Any non-positive amount is rejected with [`Error::InvalidAmount`] before the

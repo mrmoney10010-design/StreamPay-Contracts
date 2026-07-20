@@ -18,6 +18,7 @@ split the funds fairly between what has and has not yet vested.
 - Authorization enforced with `require_auth` on every state-changing call.
 - Checked arithmetic throughout to avoid silent overflow.
 - Events emitted for stream creation, withdrawal, and cancellation.
+- A one-day timelock protects changes to the contract administrator.
 
 ## Contract API
 
@@ -41,6 +42,11 @@ split the funds fairly between what has and has not yet vested.
 | `cancel(id, caller)` | Sender or recipient cancels; splits funds by vested/unvested. |
 | `get_stream(id) -> Stream` | View: the full stream record. |
 | `get_admin() -> Address` | View: the configured admin. |
+| `schedule_admin_transfer(admin, new_admin) -> u64` | Admin-only: queues an admin transfer and returns its execution timestamp. |
+| `execute_admin_transfer()` | Permissionless after the timelock: promotes the queued admin. |
+| `cancel_admin_transfer(admin)` | Admin-only: cancels the queued admin transfer. |
+| `get_pending_admin() -> Option<Address>` | View: the queued replacement admin, if any. |
+| `get_admin_action_execute_after() -> Option<u64>` | View: timestamp at which the queued transfer can execute. |
 | `get_token() -> Address` | View: the streamed token address. |
 | `stream_counter() -> u64` | View: number of streams created so far. |
 
@@ -70,6 +76,19 @@ event name and the stream id.
 | `("extended", id)` | `(sender, old_end, new_end)` | `extend_stream` |
 | `("withdrawn", id)` | `(recipient, amount)` | `withdraw` |
 | `("cancelled", id)` | `(caller, sender_refund, recipient_paid)` | `cancel` |
+| `("admin_scheduled",)` | `(current_admin, pending_admin, execute_after)` | `schedule_admin_transfer` |
+| `("admin_transfer",)` | `(previous_admin, new_admin)` | `execute_admin_transfer` |
+| `("admin_cancelled",)` | `admin` | `cancel_admin_transfer` |
+
+## Admin timelock
+
+The administrator cannot be changed immediately. The current admin calls
+`schedule_admin_transfer(admin, new_admin)`, which records the replacement and
+an execution time exactly 86,400 seconds (one day) in the future. Until that
+time, `execute_admin_transfer()` returns `TimelockNotExpired`. Once the delay
+has passed, any account may execute the transfer; this makes an approved change
+reliable even if the old admin is unavailable. The current admin can replace or
+cancel a pending transfer before execution.
 
 ## Build
 

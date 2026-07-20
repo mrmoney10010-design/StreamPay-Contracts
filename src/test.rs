@@ -71,6 +71,67 @@ fn test_initialize_twice_fails() {
 }
 
 #[test]
+fn test_admin_transfer_requires_timelock_then_executes() {
+    let s = setup();
+    let new_admin = Address::generate(&s.env);
+    set_time(&s.env, 1_000);
+
+    let execute_after = s
+        .contract
+        .schedule_admin_transfer(&s.admin, &new_admin);
+    assert_eq!(execute_after, 1_000 + crate::ADMIN_TIMELOCK_DELAY);
+    assert_eq!(s.contract.get_pending_admin(), Some(new_admin.clone()));
+    assert_eq!(s.contract.get_admin_action_execute_after(), Some(execute_after));
+    assert_eq!(
+        s.contract.try_execute_admin_transfer(),
+        Err(Ok(Error::TimelockNotExpired))
+    );
+
+    set_time(&s.env, execute_after);
+    // The executor is intentionally permissionless after the delay.
+    s.contract.execute_admin_transfer();
+    assert_eq!(s.contract.get_admin(), new_admin);
+    assert_eq!(s.contract.get_pending_admin(), None);
+    assert_eq!(s.contract.get_admin_action_execute_after(), None);
+}
+
+#[test]
+fn test_admin_transfer_can_be_replaced_or_cancelled_by_current_admin() {
+    let s = setup();
+    let first = Address::generate(&s.env);
+    let replacement = Address::generate(&s.env);
+    s.contract.schedule_admin_transfer(&s.admin, &first);
+    s.contract.schedule_admin_transfer(&s.admin, &replacement);
+    assert_eq!(s.contract.get_pending_admin(), Some(replacement));
+
+    s.contract.cancel_admin_transfer(&s.admin);
+    assert_eq!(s.contract.get_pending_admin(), None);
+    assert_eq!(
+        s.contract.try_execute_admin_transfer(),
+        Err(Ok(Error::NoPendingAdminAction))
+    );
+}
+
+#[test]
+fn test_admin_transfer_rejects_non_admin_and_noop_transfer() {
+    let s = setup();
+    let stranger = Address::generate(&s.env);
+    let new_admin = Address::generate(&s.env);
+    assert_eq!(
+        s.contract.try_schedule_admin_transfer(&stranger, &new_admin),
+        Err(Ok(Error::Unauthorized))
+    );
+    assert_eq!(
+        s.contract.try_schedule_admin_transfer(&s.admin, &s.admin),
+        Err(Ok(Error::InvalidAdminAction))
+    );
+    assert_eq!(
+        s.contract.try_cancel_admin_transfer(&s.admin),
+        Err(Ok(Error::NoPendingAdminAction))
+    );
+}
+
+#[test]
 fn test_create_stream_escrows_and_returns_id() {
     let s = setup();
     let id = s
