@@ -1,4 +1,16 @@
 #![no_std]
+#![deny(clippy::all)]
+#![warn(clippy::pedantic)]
+// Intentional numeric casts that are safe by construction:
+//   - u64 subtractions cast to i128/u128 for vesting math (values bounded by window)
+//   - i128 bps values cast to u32 (bounded to 0..=10_000)
+//   - usize/u32 loop counters cast to u64 for stream IDs
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_sign_loss)]
+// Type names intentionally repeat the module name (e.g. `error::Error`).
+#![allow(clippy::module_name_repetitions)]
 //! StreamPay: a real-time payment-streaming smart contract for Stellar.
 //!
 //! StreamPay lets a sender escrow a fixed amount of a token and stream it

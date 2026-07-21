@@ -119,6 +119,30 @@ The release artifact is written to:
 target/wasm32-unknown-unknown/release/streampay_contract.wasm
 ```
 
+## CI
+
+Every push and pull request runs three CI checks:
+
+- **Format**: `cargo fmt --all -- --check` enforces consistent code style.
+- **Clippy**: `cargo clippy --all-targets -- -D warnings` denies all clippy
+  warnings, including pedantic lints. Known-safe casts are allowed at the
+  crate level.
+- **Test**: `cargo test` runs the full unit test suite.
+
+All three checks must pass before a PR can be merged. Run them locally with:
+
+```bash
+make fmt-check  # or `make fmt` to auto-fix formatting
+make clippy
+make test
+```
+
+Or run all three in one command:
+
+```bash
+make lint
+```
+
 ## Deploy
 
 ```bash
