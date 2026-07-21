@@ -1040,6 +1040,8 @@ fn test_create_stream_zero_start_rejects_end_before_now() {
         .contract
         .try_create_stream(&s.sender, &s.recipient, &1_000, &0, &500);
     assert_eq!(res, Err(Ok(Error::InvalidTimeRange)));
+}
+
 // --- Supply cap tests -------------------------------------------------------
 
 #[test]
@@ -1229,6 +1231,8 @@ fn test_supply_recovers_after_full_withdraw_allowing_new_stream() {
         .create_stream(&s.sender, &s.recipient, &500, &400, &500);
     assert_eq!(new_id, 1);
     assert_eq!(s.contract.get_total_supply(), 500);
+}
+
 // --- README content contract -----------------------------------------------
 
 /// Verify that the README contains a "Resource Costs" section.
