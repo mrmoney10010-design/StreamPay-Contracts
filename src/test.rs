@@ -8,7 +8,7 @@ use crate::types::{Status, StreamRequest};
 use crate::{StreamPayContract, StreamPayContractClient};
 use soroban_sdk::testutils::{Address as _, AuthorizedFunction, Ledger};
 use soroban_sdk::token::{StellarAssetClient, TokenClient};
-use soroban_sdk::{Address, Env, IntoVal, Symbol, Vec};
+use soroban_sdk::{Address, Env, IntoVal, Symbol, Val, Vec};
 
 /// Test fixture bundling the environment, contract client, token, and actors.
 #[allow(dead_code)]
@@ -132,6 +132,43 @@ fn test_admin_transfer_rejects_non_admin_and_noop_transfer() {
 }
 
 #[test]
+fn test_admin_transfer_events_emit_payloads() {
+    let s = setup();
+    let first_admin = Address::generate(&s.env);
+    let replacement_admin = Address::generate(&s.env);
+    set_time(&s.env, 1_000);
+
+    let execute_after = s
+        .contract
+        .schedule_admin_transfer(&s.admin, &first_admin);
+    let events = contract_events(&s.env, &s.contract.address);
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].0, admin_topics(&s.env, "admin_scheduled"));
+    assert_eq!(
+        events[0].1,
+        (s.admin.clone(), first_admin.clone(), execute_after).into_val(&s.env)
+    );
+
+    set_time(&s.env, execute_after);
+    s.contract.execute_admin_transfer();
+    let events = contract_events(&s.env, &s.contract.address);
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[1].0, admin_topics(&s.env, "admin_transfer"));
+    assert_eq!(
+        events[1].1,
+        (s.admin.clone(), first_admin.clone()).into_val(&s.env)
+    );
+
+    s.contract.schedule_admin_transfer(&first_admin, &replacement_admin);
+    s.contract.cancel_admin_transfer(&first_admin);
+    let events = contract_events(&s.env, &s.contract.address);
+    assert_eq!(events.len(), 4);
+    assert_eq!(events[2].0, admin_topics(&s.env, "admin_scheduled"));
+    assert_eq!(events[3].0, admin_topics(&s.env, "admin_cancelled"));
+    assert_eq!(events[3].1, first_admin.clone().into_val(&s.env));
+}
+
+#[test]
 fn test_create_stream_escrows_and_returns_id() {
     let s = setup();
     let id = s
@@ -152,6 +189,61 @@ fn test_create_stream_escrows_and_returns_id() {
     assert_eq!(stream.start, 100);
     assert_eq!(stream.end, 200);
     assert_eq!(stream.status, Status::Active);
+}
+
+#[test]
+fn test_create_stream_emits_created_event_payload() {
+    let s = setup();
+    let id = s
+        .contract
+        .create_stream(&s.sender, &s.recipient, &1_000, &100, &200);
+
+    let events = contract_events(&s.env, &s.contract.address);
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].0, stream_topics(&s.env, "created", id));
+    assert_eq!(
+        events[0].1,
+        (s.sender.clone(), s.recipient.clone(), 1_000_i128).into_val(&s.env)
+    );
+}
+
+#[test]
+fn test_create_stream_batch_emits_created_event_payloads() {
+    let s = setup();
+    let second_recipient = Address::generate(&s.env);
+    let requests = Vec::from_array(
+        &s.env,
+        [
+            StreamRequest {
+                recipient: s.recipient.clone(),
+                total_amount: 1_000,
+                start_time: 100,
+                end_time: 200,
+            },
+            StreamRequest {
+                recipient: second_recipient.clone(),
+                total_amount: 2_000,
+                start_time: 150,
+                end_time: 300,
+            },
+        ],
+    );
+
+    let ids = s.contract.create_stream_batch(&s.sender, &requests);
+    assert_eq!(ids, Vec::from_array(&s.env, [0_u64, 1_u64]));
+
+    let events = contract_events(&s.env, &s.contract.address);
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0].0, stream_topics(&s.env, "created", 0));
+    assert_eq!(
+        events[0].1,
+        (s.sender.clone(), s.recipient.clone(), 1_000_i128).into_val(&s.env)
+    );
+    assert_eq!(events[1].0, stream_topics(&s.env, "created", 1));
+    assert_eq!(
+        events[1].1,
+        (s.sender.clone(), second_recipient.clone(), 2_000_i128).into_val(&s.env)
+    );
 }
 
 #[test]
@@ -537,6 +629,24 @@ fn test_top_up_increases_total_and_escrow() {
 }
 
 #[test]
+fn test_top_up_emits_toppedup_event_payload() {
+    let s = setup();
+    let id = s
+        .contract
+        .create_stream(&s.sender, &s.recipient, &1_000, &100, &200);
+
+    let new_total = s.contract.top_up(&id, &s.sender, &500);
+
+    let events = contract_events(&s.env, &s.contract.address);
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[1].0, stream_topics(&s.env, "toppedup", id));
+    assert_eq!(
+        events[1].1,
+        (s.sender.clone(), 500_i128, new_total).into_val(&s.env)
+    );
+}
+
+#[test]
 fn test_top_up_rejects_non_sender_and_bad_amount() {
     let s = setup();
     let id = s
@@ -588,6 +698,24 @@ fn test_extend_stream_slows_vesting() {
 }
 
 #[test]
+fn test_extend_stream_emits_extended_event_payload() {
+    let s = setup();
+    let id = s
+        .contract
+        .create_stream(&s.sender, &s.recipient, &1_000, &100, &200);
+
+    s.contract.extend_stream(&id, &s.sender, &300);
+
+    let events = contract_events(&s.env, &s.contract.address);
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[1].0, stream_topics(&s.env, "extended", id));
+    assert_eq!(
+        events[1].1,
+        (s.sender.clone(), 200_u64, 300_u64).into_val(&s.env)
+    );
+}
+
+#[test]
 fn test_extend_stream_rejects_earlier_end() {
     let s = setup();
     let id = s
@@ -631,6 +759,25 @@ fn test_cancel_splits_funds_between_parties() {
 
     let stream = s.contract.get_stream(&id);
     assert_eq!(stream.status, Status::Cancelled);
+}
+
+#[test]
+fn test_cancel_emits_cancelled_event_payload() {
+    let s = setup();
+    let id = s
+        .contract
+        .create_stream(&s.sender, &s.recipient, &1_000, &100, &200);
+
+    set_time(&s.env, 150);
+    s.contract.cancel(&id, &s.sender);
+
+    let events = contract_events(&s.env, &s.contract.address);
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[1].0, stream_topics(&s.env, "cancelled", id));
+    assert_eq!(
+        events[1].1,
+        (s.sender.clone(), 500_i128, 500_i128).into_val(&s.env)
+    );
 }
 
 #[test]
@@ -1109,6 +1256,23 @@ fn test_instance_ttl_bump() {
         let ttl = s.env.storage().instance().get_ttl();
         assert_eq!(ttl, crate::storage::BUMP_EXTEND);
     });
+}
+
+fn contract_events(env: &Env, contract: &Address) -> std::vec::Vec<(Vec<Val>, Val)> {
+    env.events()
+        .all()
+        .into_iter()
+        .filter(|(event_contract, _, _)| event_contract == contract)
+        .map(|(_, topics, data)| (topics, data))
+        .collect()
+}
+
+fn stream_topics(env: &Env, name: &str, id: u64) -> Vec<Val> {
+    Vec::from_array(env, [Symbol::new(env, name).into_val(env), id.into_val(env)])
+}
+
+fn admin_topics(env: &Env, name: &str) -> Vec<Val> {
+    Vec::from_array(env, [Symbol::new(env, name).into_val(env)])
 }
 
 #[test]
