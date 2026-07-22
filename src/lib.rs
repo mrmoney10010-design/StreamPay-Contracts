@@ -125,8 +125,8 @@ impl StreamPayContract {
             return Err(Error::NotInitialized);
         }
         let pending_admin = storage::read_pending_admin(&env).ok_or(Error::NoPendingAdminAction)?;
-        let execute_after = storage::read_admin_action_execute_after(&env)
-            .ok_or(Error::NoPendingAdminAction)?;
+        let execute_after =
+            storage::read_admin_action_execute_after(&env).ok_or(Error::NoPendingAdminAction)?;
         if env.ledger().timestamp() < execute_after {
             return Err(Error::TimelockNotExpired);
         }
@@ -175,7 +175,7 @@ impl StreamPayContract {
         if !storage::has_admin(&env) {
             return Err(Error::NotInitialized);
         }
-        
+
         let current_admin = storage::read_admin(&env);
         current_admin.require_auth();
 
@@ -193,11 +193,12 @@ impl StreamPayContract {
         if !storage::has_admin(&env) {
             return Err(Error::NotInitialized);
         }
-        
+
         let current_admin = storage::read_admin(&env);
         current_admin.require_auth();
 
-        env.deployer().update_current_contract_wasm(new_wasm_hash.clone());
+        env.deployer()
+            .update_current_contract_wasm(new_wasm_hash.clone());
         storage::extend_instance(&env);
 
         events::contract_upgraded(&env, &new_wasm_hash);
@@ -435,9 +436,7 @@ impl StreamPayContract {
 
         // Check the global supply cap before pulling additional tokens.
         let current_supply = storage::read_total_supply(&env);
-        let new_supply = current_supply
-            .checked_add(amount)
-            .ok_or(Error::Overflow)?;
+        let new_supply = current_supply.checked_add(amount).ok_or(Error::Overflow)?;
         let cap = storage::read_supply_cap(&env);
         if new_supply > cap {
             return Err(Error::SupplyCapExceeded);

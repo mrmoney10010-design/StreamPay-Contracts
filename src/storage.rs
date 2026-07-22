@@ -101,10 +101,7 @@ pub fn write_token(env: &Env, token: &Address) {
 
 /// Reads the current stream counter, defaulting to zero.
 pub fn read_counter(env: &Env) -> u64 {
-    env.storage()
-        .instance()
-        .get(&DataKey::Counter)
-        .unwrap_or(0)
+    env.storage().instance().get(&DataKey::Counter).unwrap_or(0)
 }
 
 /// Writes the stream counter into instance storage.
@@ -113,6 +110,7 @@ pub fn write_counter(env: &Env, counter: u64) {
 }
 
 /// Returns `true` if a stream exists for the given id.
+#[allow(dead_code)]
 pub fn has_stream(env: &Env, id: u64) -> bool {
     env.storage().persistent().has(&DataKey::Stream(id))
 }
@@ -152,9 +150,7 @@ pub fn read_total_supply(env: &Env) -> i128 {
 
 /// Writes the total escrowed supply into instance storage.
 pub fn write_total_supply(env: &Env, supply: i128) {
-    env.storage()
-        .instance()
-        .set(&DataKey::TotalSupply, &supply);
+    env.storage().instance().set(&DataKey::TotalSupply, &supply);
 }
 
 /// Reads the supply cap from instance storage.

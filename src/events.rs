@@ -33,13 +33,7 @@ pub fn admin_transfer_cancelled(env: &Env, admin: &Address) {
 }
 
 /// Publishes a `created` event when a new stream is opened.
-pub fn stream_created(
-    env: &Env,
-    id: u64,
-    sender: &Address,
-    recipient: &Address,
-    total: i128,
-) {
+pub fn stream_created(env: &Env, id: u64, sender: &Address, recipient: &Address, total: i128) {
     let topics = (symbol_short!("created"), id);
     env.events()
         .publish(topics, (sender.clone(), recipient.clone(), total));
@@ -108,4 +102,3 @@ pub fn contract_upgraded(env: &Env, new_wasm_hash: &soroban_sdk::BytesN<32>) {
     let topics = (symbol_short!("upgraded"),);
     env.events().publish(topics, new_wasm_hash.clone());
 }
-

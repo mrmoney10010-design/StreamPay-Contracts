@@ -40,7 +40,7 @@ pub enum Error {
     /// The requested admin action would not change contract administration.
     InvalidAdminAction = 16,
     /// The operation would push the total escrowed supply above the global cap.
-    SupplyCapExceeded = 14,
+    SupplyCapExceeded = 18,
     /// A batch entrypoint was called without any operations.
-    EmptyBatch = 17,
+    EmptyBatch = 19,
 }
